@@ -32,18 +32,16 @@
 ## 📁 项目结构
 
 ```
-
 tetris-dqn/
 ├── config.py             # 配置文件（游戏与训练参数）
 ├── tetromino.py          # 方块定义与逻辑实现
-├── tetris\_env.py         # 俄罗斯方块游戏环境（Gym 风格）
+├── tetris_env.py         # 俄罗斯方块游戏环境（Gym 风格）
 ├── dqn.py                # DQN 网络模型（卷积结构）
-├── replay\_buffer.py      # 经验回放机制实现
-├── dqn\_agent.py          # DQN 智能体策略类
+├── replay_buffer.py      # 经验回放机制实现
+├── dqn_agent.py          # DQN 智能体策略类
 ├── train.py              # 主程序：训练与测试入口
 ├── requirements.txt      # Python依赖项列表
 └── README.md             # 项目说明文档
-
 ````
 
 ---
@@ -59,7 +57,7 @@ tetris-dqn/
 ### 🧩 安装步骤
 
 ```bash
-git clone https://github.com/yourusername/tetris-dqn.git
+git clone https://github.com/1998x-stack/tetris-dqn.git
 cd tetris-dqn
 pip install -r requirements.txt
 ````
@@ -209,8 +207,8 @@ python train.py
 ```bibtex
 @misc{tetris_dqn_2024,
   title={俄罗斯方块DQN智能体训练系统},
-  author={Your Name},
+  author={1998x-stack},
   year={2024},
-  url={https://github.com/yourusername/tetris-dqn}
+  url={https://github.com/1998x-stack/tetris-dqn}
 }
 ```
