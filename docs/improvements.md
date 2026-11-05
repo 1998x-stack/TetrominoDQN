@@ -12,5 +12,5 @@
 - Security & regression review: No credentials, workflows, production writes, or model schema changes; array copies incur memory/time overhead proportional to observation size. Existing eviction and sampling semantics checked locally.
 - Risk & rollback: Memory overhead of copied observations; revert branch commits or close the Draft PR, leaving main unchanged.
 - Follow-up: Verify tests against a fresh checkout with repository-pinned numpy; inspect DQN loss behavior with batch size one.
-- Commit: pending
-- PR: pending
+- Commit: 4f3a1bbff2d449b8355b8baa84979dc206e368c7 (initial history commit; later metadata-only update follows)
+- PR: https://github.com/1998x-stack/TetrominoDQN/pull/1
