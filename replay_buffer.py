@@ -15,6 +15,8 @@ class ReplayBuffer:
         参数:
             capacity: 缓冲区容量
         """
+        if capacity <= 0:
+            raise ValueError("capacity must be positive")
         self.buffer = deque(maxlen=capacity)
         self.capacity = capacity
     
@@ -34,7 +36,9 @@ class ReplayBuffer:
             next_state: 下一个状态
             done: 是否结束
         """
-        self.buffer.append((state, action, reward, next_state, done))
+        # Snapshot observations: environments often reuse and mutate their arrays.
+        self.buffer.append((np.array(state, copy=True), action, reward,
+                            np.array(next_state, copy=True), done))
     
     def sample(self, batch_size: int) -> Optional[Tuple]:
         """
@@ -46,6 +50,8 @@ class ReplayBuffer:
         返回:
             Optional[Tuple]: 批量的 (state, action, reward, next_state, done)
         """
+        if batch_size <= 0:
+            raise ValueError("batch_size must be positive")
         if len(self.buffer) < batch_size:
             return None
             
