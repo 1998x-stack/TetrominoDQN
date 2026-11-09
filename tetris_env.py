@@ -2,6 +2,7 @@
 """实现俄罗斯方块游戏环境，符合gym.Env接口"""
 import numpy as np
 import pygame
+import random
 import gym
 from gym import spaces
 from typing import Tuple, Optional, List
@@ -46,6 +47,9 @@ class TetrisEnv(gym.Env):
         else:
             self.screen = None
         
+        # Independent episode RNG; reset(seed=...) reproduces the same pieces.
+        self._rng = random.Random()
+
         # 游戏状态
         self.reset()
         
@@ -60,22 +64,25 @@ class TetrisEnv(gym.Env):
         self.screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
         pygame.display.set_caption("俄罗斯方块 DQN 训练")
     
-    def reset(self) -> np.ndarray:
+    def reset(self, seed: Optional[int] = None) -> np.ndarray:
         """
         重置游戏状态并返回初始观察值
         
         返回:
             np.ndarray: 初始状态观察值
         """
+        if seed is not None:
+            self._rng.seed(seed)
         # 游戏板: 0表示空，非0表示有方块
         self.board = [[0 for _ in range(GRID_WIDTH)] for _ in range(GRID_HEIGHT)]
         
         # 当前方块和下一个方块
-        self.current_piece = Tetromino()
-        self.next_piece = Tetromino()
+        self.current_piece = Tetromino(rng=self._rng)
+        self.next_piece = Tetromino(rng=self._rng)
         
         # 游戏状态
         self.game_over = False
+        self._episode_done = False
         self.score = 0
         self.level = 1
         self.lines_cleared = 0
@@ -160,7 +167,7 @@ class TetrisEnv(gym.Env):
         
         # 生成新方块
         self.current_piece = self.next_piece
-        self.next_piece = Tetromino()
+        self.next_piece = Tetromino(rng=self._rng)
         
         # 检查游戏是否结束
         if not self.valid_position(self.current_piece.shape, self.current_piece.x, self.current_piece.y):
@@ -173,10 +180,12 @@ class TetrisEnv(gym.Env):
             if all(self.board[row_idx]):
                 lines_to_clear.append(row_idx)
         
-        # 清除行
-        for row_idx in sorted(lines_to_clear, reverse=True):
-            del self.board[row_idx]
-            self.board.insert(0, [0 for _ in range(GRID_WIDTH)])
+        # Remove all completed rows atomically: removing while inserting shifts indices.
+        # The old in-place loop skipped rows when two or more completed together.
+        if lines_to_clear:
+            completed = set(lines_to_clear)
+            survivors = [row for i, row in enumerate(self.board) if i not in completed]
+            self.board = [[0 for _ in range(GRID_WIDTH)] for _ in lines_to_clear] + survivors
         
         # 更新分数
         if lines_to_clear:
@@ -205,9 +214,11 @@ class TetrisEnv(gym.Env):
                 done: 是否结束
                 info: 附加信息
         """
-        if self.game_over:
-            return self._get_state(), 0, True, {'reason': 'game_over'}
-        
+        if self._episode_done:
+            raise RuntimeError("episode finished; call reset before taking another action")
+        if not self.action_space.contains(action):
+            raise ValueError("action must be an integer in [0, 5]")
+
         # 记录初始分数用于计算奖励
         prev_score = self.score
         
@@ -231,12 +242,14 @@ class TetrisEnv(gym.Env):
             # 直接下落给予更大奖励
             reward = 0.5
         
-        # 自动下落
-        self.fall_timer += 1/60  # 假设60FPS
-        if self.fall_timer >= self.fall_speed:
-            self.fall_timer = 0
-            if not self._move(0, 1):
-                self._place_piece()
+        # A hard drop already spawned the next piece; don't move it again on
+        # the same action. Otherwise advance the simulation clock by one tick.
+        if action != 4:
+            self.fall_timer += 1/60
+            if self.fall_timer >= self.fall_speed:
+                self.fall_timer = 0
+                if not self._move(0, 1):
+                    self._place_piece()
         
         # 添加清除行的奖励
         reward += (self.score - prev_score) / 100.0
@@ -247,10 +260,11 @@ class TetrisEnv(gym.Env):
         
         # 检查步数限制
         self.steps += 1
-        truncated = self.steps >= self.max_steps
-        
+        truncated = (not self.game_over) and self.steps >= self.max_steps
+
         # 返回结果
         done = self.game_over or truncated
+        self._episode_done = done
         info = {
             'score': self.score, 
             'lines': self.lines_cleared, 
@@ -275,11 +289,11 @@ class TetrisEnv(gym.Env):
         if self.game_over:
             return False
             
-        return self.valid_position(
-            self.current_piece.shape, 
-            self.current_piece.x + dx, 
-            self.current_piece.y + dy
-        )
+        new_x, new_y = self.current_piece.x + dx, self.current_piece.y + dy
+        if not self.valid_position(self.current_piece.shape, new_x, new_y):
+            return False
+        self.current_piece.x, self.current_piece.y = new_x, new_y
+        return True
     
     def _rotate_piece(self) -> bool:
         """

@@ -8,15 +8,16 @@ from config import SHAPES, SHAPE_COLORS, GRID_WIDTH
 class Tetromino:
     """表示俄罗斯方块中的一个方块"""
     
-    def __init__(self, shape_index = None):
+    def __init__(self, shape_index=None, rng=None):
         """
         初始化方块
         
         参数:
             shape_index: 指定方块形状的索引 (可选)
         """
+        self._rng = rng if rng is not None else random
         if shape_index is None:
-            self.shape_index = random.randint(0, len(SHAPES) - 1)
+            self.shape_index = self._rng.randint(0, len(SHAPES) - 1)
         else:
             self.shape_index = shape_index % len(SHAPES)
         

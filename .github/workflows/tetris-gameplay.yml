@@ -1,0 +1,36 @@
+name: P2 Tetris gameplay contract
+
+on:
+  push:
+    branches: [main, "optimize/**"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  gameplay:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      SDL_VIDEODRIVER: dummy
+      SDL_AUDIODRIVER: dummy
+      PYGAME_HIDE_SUPPORT_PROMPT: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Minimal headless dependencies (no GPU or DQN training)
+        run: python -m pip install numpy==1.26.4 pygame==2.5.2 gym==0.26.2
+      - name: Python syntax check
+        run: python -m compileall -q config.py tetromino.py tetris_env.py replay_buffer.py scripts/ tests/
+      - name: Run real Tetris mechanics and replay tests
+        run: python -m unittest discover -s tests -v
+      - name: Seeded random-policy CPU episode baseline twice
+        run: |
+          python scripts/random_baseline.py --episodes 3 --steps 400 > /tmp/baseline1.json
+          python scripts/random_baseline.py --episodes 3 --steps 400 > /tmp/baseline2.json
+          diff -u /tmp/baseline1.json /tmp/baseline2.json
+          cat /tmp/baseline1.json
