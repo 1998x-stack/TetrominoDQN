@@ -1,214 +1,42 @@
-# 俄罗斯方块智能体训练系统（基于DQN）
+# TetrominoDQN · Tetris 规则环境与 DQN 研究工程
 
-🎮 一个基于深度强化学习（DQN）的俄罗斯方块训练平台，集成完整游戏环境、训练流程与模型管理，支持人机交互和视觉反馈，助力研究与教学。
+本仓库包含 Pygame 俄罗斯方块环境、遗留 Gym 四元组 API、经验回放、DQN 模型及训练入口。**规则回归、随机策略基线、深度网络训练是三个不同的验证等级**，不要将轻量 CPU 测试当作训练成功或实际游戏品质认证。
 
----
+## P2 玩法核心修复（2026-11-09）
 
-## 🧠 系统简介
+- 修复 `_move` 只判断而**未更新方块坐标**，导致左移、右移、下移和自动重力不真正移动的问题。
+- 同一时刻消除两行以上时，改为一次性移除所有满行，再补足顶部空行，避免边删除边插入造成索引错位。
+- 硬降落后不会在同一步继续推动刚生成的下一块；墙边不能旋转时不会篡改原形状。
+- `reset(seed=...)` 使用每个环境自己的随机源，可独立复现方块序列，不污染 Python 的全局随机状态。
+- 非法动作明确拒绝；步数截断/堆叠死亡后禁止继续 `step`，需要重置游戏。
+- 新增无界面玩法回归与种子固定的 **uniform-random-actions** 基线（真实执行对局，不启动 DQN 神经网络）。
 
-本项目构建了一个完整的俄罗斯方块训练系统，结合 PyTorch 实现的深度Q网络（DQN）算法，智能体可以在环境中自主学习并优化策略，实现从零开始的俄罗斯方块掌握过程。
+### 复现最小环境（无需 GPU）
 
-系统模块包括：
-
-- ✅ 游戏环境构建（符合 OpenAI Gym 接口）
-- ✅ DQN 网络架构与优化策略
-- ✅ 经验回放机制（Replay Buffer）
-- ✅ 训练与测试流程可视化
-- ✅ 配置灵活、界面友好、训练过程实时监控
-
----
-
-## 🔧 功能亮点
-
-- 🎮 **完整游戏体验**：支持键盘控制与训练过程自动演示
-- 🤖 **DQN 智能体训练**：基于 PyTorch 框架实现
-- 💾 **经验回放机制**：高效采样支持稳定训练
-- 🧠 **训练状态监控**：输出实时进度与性能指标
-- 🖥️ **图形化界面**：基于 Pygame 构建美观 UI
-- ⚙️ **高度可配置**：所有参数集中管理，便于实验调参
-
----
-
-## 📁 项目结构
-
-```
-tetris-dqn/
-├── config.py             # 配置文件（游戏与训练参数）
-├── tetromino.py          # 方块定义与逻辑实现
-├── tetris_env.py         # 俄罗斯方块游戏环境（Gym 风格）
-├── dqn.py                # DQN 网络模型（卷积结构）
-├── replay_buffer.py      # 经验回放机制实现
-├── dqn_agent.py          # DQN 智能体策略类
-├── train.py              # 主程序：训练与测试入口
-├── requirements.txt      # Python依赖项列表
-└── README.md             # 项目说明文档
-````
-
----
-
-## ⚙️ 安装指南
-
-### ✅ 环境依赖
-
-- Python 3.8+
-- PyTorch 2.x（请根据CUDA版本选择正确安装方式）
-- Pygame 2.5+
-
-### 🧩 安装步骤
+Python 3.11 推荐从**本仓库根目录**运行：
 
 ```bash
-git clone https://github.com/1998x-stack/tetris-dqn.git
-cd tetris-dqn
-pip install -r requirements.txt
-````
-
----
-
-## 🚀 快速开始
-
-### 🔁 训练智能体
-
-默认训练 1000 回合（每 50 回合渲染一次画面）：
-
-```bash
-python train.py
+git clone https://github.com/1998x-stack/TetrominoDQN.git
+cd TetrominoDQN
+python -m pip install numpy==1.26.4 pygame==2.5.2 gym==0.26.2
+SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy python -m unittest discover -s tests -v
+SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy python scripts/random_baseline.py --episodes 3 --steps 400
 ```
 
-训练过程将实时输出以下信息：
+`tetris_env.TetrisEnv` 暂沿用旧训练入口要求的 **`reset()->obs` 和 `step()->(obs,reward,done,info)`**，与现代 Gymnasium 五元组 API 不等价。此阶段优先保障原训练调用路径与实际规则一致，不声称完成全量现代 API 升级。
 
-* 回合数 / 得分 / 消除行数 / 当前等级
-* 当前 ε-贪婪值（探索率）
-* 当前平均损失 / 训练耗时
+本分支新增 CI `P2 Tetris gameplay contract`：检查 Python 语法、移动/旋转/硬降落、两行消除、越界与重置、观察类型、旧 replay buffer，以及 3×3 组固定种子的随机策略对局 JSON **双重一致**。原始 CI 应以实际运行结果判断是否通过，链接：[工作流](https://github.com/1998x-stack/TetrominoDQN/actions/workflows/tetris-gameplay.yml)。
 
-### 🧪 测试智能体
+## 训练与项目结构
 
-测试预训练模型需将 `train.py` 中的参数设置为：
+- `tetris_env.py` + `tetromino.py`：方块规则、状态空间与可选 Pygame 渲染。
+- `replay_buffer.py` + `dqn.py` + `dqn_agent.py`：经验回放与深度 Q 学习组件。
+- `train.py`：历史默认训练/演示入口，依赖 PyTorch、TensorBoardX 和显示设备；请参考 `requirements.txt`，并核对对应版本与训练输出。
+- `tests/test_tetris_mechanics.py`：规则、终局、安全性和随机种子回归。
+- `scripts/random_baseline.py`：固定三个种子、固定回合与步数的无学习随机动作基准，输出分数、行数与存活步数。
 
-```python
-train_mode = False
-```
+**尚未验收：** DQN 完整训练奖励曲线、最终模型复现、随机/智能体同条件对照与真实物理键盘/屏幕体验。原 README 曾列出“平均分 5000+、100+ 消行”等示例数据，但未附足够可独立核对的训练证据，因此不将其视为已验证性能。
 
-确保模型路径有效，然后执行：
+## 授权与素材
 
-```bash
-python train.py
-```
-
----
-
-## 🛠️ 参数配置说明
-
-参数集中在 `config.py` 文件中，包括但不限于：
-
-* 🎮 游戏设置：网格尺寸、下落速度、颜色等
-* 🧠 训练设置：学习率、折扣因子、探索率等
-* 🕸️ 网络结构：隐藏层数、卷积层参数
-* 💾 模型路径：保存/加载的目录位置
-
----
-
-## 🔍 关键模块概览
-
-### `TetrisEnv`（游戏环境）
-
-* 实现 `gym.Env` 接口
-* 状态空间/动作空间标准化定义
-* 支持方块生成、移动、旋转、判定、消行等逻辑
-
-### `DQNAgent`（智能体）
-
-* 基于 ε-greedy 策略选择动作
-* 支持策略更新与模型保存/加载
-* 内置 replay buffer 支持批量训练
-
-### `ReplayBuffer`（经验回放）
-
-* 使用 deque 实现
-* 随机采样历史经验，防止相关性干扰
-* 提供固定大小缓冲池，提高训练稳定性
-
-### `DQN`（网络模型）
-
-* 输入：游戏状态图像
-* 输出：各动作的 Q 值
-* 结构：卷积网络 + 全连接层
-
----
-
-## ⚡ 性能优化手段
-
-* ✅ 自动检测 GPU，启用硬件加速
-* ✅ 支持训练过程梯度裁剪，避免爆炸
-* ✅ 批量更新支持并行加速
-* ✅ 模型周期性保存（每50回合）
-
----
-
-## 📈 模型监控与保存
-
-训练过程中将自动保存模型文件至指定路径：
-
-* `best_model.pth`：历史最优模型
-* `final_model.pth`：最终模型
-* `checkpoints/`：周期性保存的中间模型
-
----
-
-## 🧪 测试结果参考
-
-> 在默认参数下训练 1000 回合后，DQN 智能体可达到如下指标：
-
-| 指标    | 值      |
-| ----- | ------ |
-| 平均得分  | 5000+  |
-| 最大消行数 | 100+ 行 |
-| 平均等级  | 10+    |
-
----
-
-## 📌 可拓展方向
-
-* ✅ 引入 Double DQN 或 Dueling DQN 架构
-* ✅ 实现 Prioritized Experience Replay
-* ✅ 多智能体竞争或协作训练支持
-* ✅ TensorBoard 日志支持
-* ✅ 模型评估与对比模块
-
----
-
-## 🤝 贡献方式
-
-我们欢迎各类贡献！
-
-1. Fork 本仓库
-2. 创建分支：`git checkout -b feature/xxx`
-3. 提交更改：`git commit -am 'Add new feature'`
-4. 推送分支：`git push origin feature/xxx`
-5. 提交 Pull Request
-
-请确保：
-
-* 遵循 PEP8 编码规范
-* 所有重要逻辑配有注释
-* 更新相应文档（如适用）
-
----
-
-## 📄 授权协议
-
-本项目采用 [MIT License](./LICENSE) 开源协议，允许自由修改、商用、传播。
-
----
-
-## 📚 引用方式
-
-若您在论文或项目中使用本系统，请引用如下内容：
-
-```bibtex
-@misc{tetris_dqn_2024,
-  title={俄罗斯方块DQN智能体训练系统},
-  author={1998x-stack},
-  year={2024},
-  url={https://github.com/1998x-stack/tetris-dqn}
-}
-```
+提交和使用代码前请检查本仓库具体许可证文件及 Pygame/其他依赖的许可证。此阶段未增加第三方 ROM、角色美术或训练权重，亦不声明未经验证的再分发授权。
